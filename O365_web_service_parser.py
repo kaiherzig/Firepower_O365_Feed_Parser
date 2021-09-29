@@ -21,18 +21,26 @@ import datetime
 import time
 import uuid
 import webexteamssdk
+#Import AWS Boto3 for SecretsManager Support
+import boto3
 
 # import supporting functions from additional file
 from Firepower import Firepower
 
 # Config Paramters
-CONFIG_FILE     = "config.json"
 CONFIG_DATA     = None
+REGION_NAME     = "eu-central-1"
+SECRET_NAME     = "O365-FirePower"
+
+session = boto3.session.Session()
+secret_client = session.client(
+service_name='secretsmanager',
+region_name=REGION_NAME,
+    )
 
 # Object Prefix
 OBJECT_PREFIX = ""
 
-# A function to load CONFIG_DATA from file
 def loadConfig():
 
     global CONFIG_DATA
@@ -41,47 +49,17 @@ def loadConfig():
     sys.stdout.write("Loading config data...")
     sys.stdout.write("\n")
 
-    # If we have a stored config file, then use it, otherwise create an empty one
-    if os.path.isfile(CONFIG_FILE):
+    # Load the json from AWS Secretsmanager
+    get_secret_value_response = secret_client.get_secret_value(
+            SecretId=SECRET_NAME
+        )
+    STR_CONFIG_DATA = get_secret_value_response['SecretString']
+    CONFIG_DATA = json.loads(STR_CONFIG_DATA)
 
-        # Open the CONFIG_FILE and load it
-        with open(CONFIG_FILE, 'r') as config_file:
-            CONFIG_DATA = json.loads(config_file.read())
 
-        sys.stdout.write("Config loading complete.")
-        sys.stdout.write("\n")
-        sys.stdout.write("\n")
-
-    else:
-
-        sys.stdout.write("Config file not found, loading empty defaults...")
-        sys.stdout.write("\n")
-        sys.stdout.write("\n")
-
-        # Set the CONFIG_DATA defaults
-        CONFIG_DATA = {
-            "FMC_IP": "",
-            "FMC_USER": "",
-            "FMC_PASS": "",
-            "IP_BYPASS_UUID": "",
-            "IP_DEFAULT_UUID": "",
-            "URL_BYPASS_UUID": "",
-            "URL_DEFAULT_UUID": "",
-            "SERVICE_AREAS": "",
-            "O365_PLAN": "",
-            "SERVICE":  False,
-            "SSL_VERIFY": False,
-            "SSL_CERT": "/path/to/certificate",
-            "AUTO_DEPLOY": False,
-            "VERSION":  0,
-            "WEBEX_ACCESS_TOKEN": "",
-            "WEBEX_ROOM_ID": "",
-            "PROXY": "",
-            "PROXY_USER": "",
-            "PROXY_PASSWD": "",
-            "PROXY_HOST": "",
-            "PROXY_PORT": "",
-        }
+    sys.stdout.write("Config loading complete.")
+    sys.stdout.write("\n")
+    sys.stdout.write("\n")
 
 # A function to store CONFIG_DATA to file
 def saveConfig():
@@ -89,8 +67,10 @@ def saveConfig():
     sys.stdout.write("Saving config data...")
     sys.stdout.write("\n")
 
-    with open(CONFIG_FILE, 'w') as output_file:
-        json.dump(CONFIG_DATA, output_file, indent=4)
+    secret_client.put_secret_value(
+        SecretId=SECRET_NAME,
+        SecretString=json.dumps(CONFIG_DATA)
+        )
 
 # A funtion to build the proxy config
 def build_proxy():
@@ -528,8 +508,7 @@ def WebServiceParser():
 
 ##############END PARSE FUNCTION##############START EXECUTION SCRIPT##############
 
-if __name__ == "__main__":
-
+def lambda_handler(event, context):
     # Load config data from file
     loadConfig()
 
